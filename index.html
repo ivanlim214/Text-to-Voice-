@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>声音 · Voice — Bilingual TTS</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500&family=Noto+Serif+SC:wght@400;600&display=swap" rel="stylesheet">
+  <!-- Mammoth.js: converts .docx to plain text in the browser -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+  <style>
+    :root {
+      --ink: #1a1410;
+      --paper: #f5f0e8;
+      --cream: #ede8da;
+      --warm: #c8a96e;
+      --accent: #c84b2f;
+      --muted: #8a7d6b;
+      --play-green: #2d7a4f;
+      --pause-amber: #c8850a;
+      --stop-red: #c84b2f;
+      --card: rgba(255,255,255,0.65);
+      --border: rgba(26,20,16,0.12);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--paper);
+      color: var(--ink);
+      min-height: 100vh;
+      position: relative;
+      overflow-x: hidden;
+    }
+
+    /* Grain texture overlay */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+      pointer-events: none;
+      z-index: 999;
+      opacity: 0.6;
+    }
+
+    /* Decorative background circles */
+    .bg-deco {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+    }
+    .bg-deco-1 {
+      width: 600px; height: 600px;
+      background: radial-gradient(circle, rgba(200,169,110,0.18) 0%, transparent 70%);
+      top: -200px; right: -150px;
+    }
+    .bg-deco-2 {
+      width: 400px; height: 400px;
+      background: radial-gradient(circle, rgba(200,75,47,0.1) 0%, transparent 70%);
+      bottom: -100px; left: -100px;
+    }
+
+    .container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 40px 24px 60px;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ─── HEADER ─── */
+    header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      margin-bottom: 48px;
+      border-bottom: 1.5px solid var(--border);
+      padding-bottom: 24px;
+    }
+
+    .logo-area h1 {
+      font-family: 'DM Serif Display', serif;
+      font-size: clamp(2rem, 4vw, 3.2rem);
+      line-height: 1;
+      letter-spacing: -0.02em;
+      color: var(--ink);
+    }
+    .logo-area h1 span {
+      color: var(--accent);
+    }
+    .logo-area p {
+      font-size: 0.82rem;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-top: 6px;
+      font-weight: 500;
+    }
+
+    /* Language Toggle */
+    .lang-toggle {
+      display: flex;
+      background: var(--cream);
+      border: 1.5px solid var(--border);
+      border-radius: 40px;
+      padding: 4px;
+      gap: 4px;
+    }
+    .lang-btn {
+      padding: 8px 20px;
+      border-radius: 36px;
+      border: none;
+      background: transparent;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.25s ease;
+      letter-spacing: 0.02em;
+    }
+    .lang-btn.active {
+      background: var(--ink);
+      color: var(--paper);
+      box-shadow: 0 2px 8px rgba(26,20,16,0.25);
+    }
+
+    /* ─── GRID ─── */
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 720px) {
+      .grid { grid-template-columns: 1fr; }
+      header { flex-direction: column; align-items: flex-start; gap: 16px; }
+    }
+
+    /* ─── CARDS ─── */
+    .card {
+      background: var(--card);
+      border: 1.5px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(8px);
+    }
+    .card-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 500;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .card-label::before {
+      content: '';
+      display: inline-block;
+      width: 18px;
+      height: 1.5px;
+      background: var(--warm);
+    }
+
+    /* ─── TEXT INPUT ─── */
+    .text-card { grid-column: span 2; }
+    @media (max-width: 720px) { .text-card { grid-column: span 1; } }
+
+    textarea {
+      width: 100%;
+      min-height: 160px;
+      resize: none;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      font-family: 'DM Sans', 'Noto Serif SC', sans-serif;
+      font-size: 1rem;
+      line-height: 1.7;
+      color: var(--ink);
+      background: rgba(245,240,232,0.7);
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    textarea:focus { border-color: var(--warm); }
+    textarea::placeholder { color: var(--muted); }
+
+    .textarea-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 12px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .char-count {
+      font-size: 0.78rem;
+      color: var(--muted);
+    }
+
+    /* Sample chips */
+    .samples {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+    .sample-chip {
+      padding: 5px 13px;
+      border-radius: 20px;
+      border: 1.5px solid var(--border);
+      background: transparent;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--ink);
+      cursor: pointer;
+      transition: all 0.2s;
+      letter-spacing: 0.01em;
+    }
+    .sample-chip:hover {
+      background: var(--ink);
+      color: var(--paper);
+      border-color: var(--ink);
+    }
+
+    /* ─── FILE DROP ZONE ─── */
+    .drop-zone {
+      position: relative;
+      border: 1.5px dashed var(--border);
+      border-radius: 10px;
+      padding: 11px 14px;
+      cursor: pointer;
+      transition: border-color 0.2s, background 0.2s;
+      margin-bottom: 12px;
+      background: rgba(245,240,232,0.4);
+    }
+    .drop-zone:hover {
+      border-color: var(--warm);
+      background: rgba(200,169,110,0.06);
+    }
+    .drop-zone.drag-over {
+      border-color: var(--warm);
+      background: rgba(200,169,110,0.1);
+    }
+    .drop-zone-inner {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--ink);
+      pointer-events: none;
+    }
+
+    /* ─── SLIDERS ─── */
+    .slider-row {
+      margin-bottom: 20px;
+    }
+    .slider-row:last-child { margin-bottom: 0; }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+    .slider-name {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--ink);
+    }
+    .slider-val {
+      font-family: 'DM Serif Display', serif;
+      font-size: 0.95rem;
+      color: var(--warm);
+    }
+    input[type=range] {
+      -webkit-appearance: none;
+      width: 100%;
+      height: 3px;
+      border-radius: 2px;
+      background: linear-gradient(to right, var(--warm) var(--pct, 50%), var(--cream) var(--pct, 50%));
+      outline: none;
+      cursor: pointer;
+      border: none;
+    }
+    input[type=range]::-webkit-slider-thumb {
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--ink);
+      box-shadow: 0 1px 4px rgba(26,20,16,0.3);
+      transition: transform 0.15s;
+    }
+    input[type=range]::-webkit-slider-thumb:active { transform: scale(1.3); }
+    .slider-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.7rem;
+      color: var(--muted);
+      margin-top: 5px;
+    }
+
+    /* ─── STYLE SELECT ─── */
+    .style-select-wrapper {
+      position: relative;
+    }
+    select {
+      width: 100%;
+      padding: 11px 14px;
+      border: 1.5px solid var(--border);
+      border-radius: 10px;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.9rem;
+      color: var(--ink);
+      background: rgba(245,240,232,0.7);
+      outline: none;
+      cursor: pointer;
+      appearance: none;
+      transition: border-color 0.2s;
+    }
+    select:focus { border-color: var(--warm); }
+    .select-arrow {
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      pointer-events: none;
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    .style-desc {
+      font-size: 0.78rem;
+      color: var(--muted);
+      margin-top: 8px;
+      font-style: italic;
+    }
+
+    /* ─── PLAYBACK CARD ─── */
+    .playback-card {
+      background: var(--ink);
+      color: var(--paper);
+      border-color: var(--ink);
+      display: flex;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .playback-card .card-label { color: rgba(245,240,232,0.5); }
+    .playback-card .card-label::before { background: var(--warm); }
+
+    /* Status */
+    .status-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    .status-dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: #4a4540;
+      transition: background 0.3s;
+      flex-shrink: 0;
+    }
+    .status-dot.playing {
+      background: #4ade80;
+      box-shadow: 0 0 8px #4ade80;
+      animation: pulse 1.5s ease-in-out infinite;
+    }
+    .status-dot.paused { background: #fbbf24; }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .status-text {
+      font-size: 0.82rem;
+      color: rgba(245,240,232,0.7);
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    /* Playback buttons */
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 11px 20px;
+      border-radius: 10px;
+      border: 1.5px solid transparent;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      letter-spacing: 0.02em;
+    }
+    .btn:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .btn-play {
+      background: var(--paper);
+      color: var(--ink);
+      flex: 1;
+    }
+    .btn-play:hover:not(:disabled) { background: var(--cream); }
+    .btn-pause {
+      background: transparent;
+      color: rgba(245,240,232,0.8);
+      border-color: rgba(245,240,232,0.25);
+    }
+    .btn-pause:hover:not(:disabled) {
+      background: rgba(255,255,255,0.08);
+      color: var(--paper);
+    }
+    .btn-stop {
+      background: rgba(200,75,47,0.15);
+      color: #f87171;
+      border-color: rgba(200,75,47,0.3);
+    }
+    .btn-stop:hover:not(:disabled) { background: rgba(200,75,47,0.25); }
+
+    .btn svg { width: 15px; height: 15px; }
+
+    /* ─── VOICE LIST ─── */
+    .voice-scroll {
+      max-height: 320px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      padding-right: 4px;
+    }
+    .voice-scroll::-webkit-scrollbar { width: 4px; }
+    .voice-scroll::-webkit-scrollbar-track { background: transparent; }
+    .voice-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .voice-group-label {
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      font-weight: 600;
+      margin-top: 12px;
+      margin-bottom: 4px;
+      padding-left: 2px;
+    }
+    .voice-group-label:first-child { margin-top: 0; }
+
+    .voice-btn {
+      width: 100%;
+      text-align: left;
+      padding: 9px 13px;
+      border-radius: 9px;
+      border: 1.5px solid transparent;
+      background: rgba(26,20,16,0.04);
+      cursor: pointer;
+      transition: all 0.18s;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .voice-btn:hover { background: rgba(26,20,16,0.08); }
+    .voice-btn.selected {
+      background: rgba(200,169,110,0.15);
+      border-color: var(--warm);
+    }
+    .voice-name {
+      font-size: 0.82rem;
+      font-weight: 500;
+      color: var(--ink);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .voice-lang-tag {
+      font-size: 0.65rem;
+      padding: 2px 7px;
+      border-radius: 20px;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+      flex-shrink: 0;
+    }
+    .tag-zh { background: rgba(200,75,47,0.12); color: var(--accent); }
+    .tag-en { background: rgba(45,122,79,0.12); color: var(--play-green); }
+    .tag-other { background: rgba(26,20,16,0.08); color: var(--muted); }
+
+    .active-dot {
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--warm);
+      flex-shrink: 0;
+    }
+
+    /* ─── TIPS ─── */
+    .tips-card {
+      background: linear-gradient(135deg, rgba(200,169,110,0.12), rgba(200,75,47,0.08));
+      border-color: rgba(200,169,110,0.3);
+    }
+    .tips-card p {
+      font-size: 0.83rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .tips-icon {
+      font-size: 1.4rem;
+      line-height: 1;
+      margin-bottom: 8px;
+    }
+
+    /* ─── FOOTER ─── */
+    footer {
+      margin-top: 48px;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Animations */
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(16px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .card { animation: fadeUp 0.4s ease both; }
+    .card:nth-child(2) { animation-delay: 0.05s; }
+    .card:nth-child(3) { animation-delay: 0.1s; }
+    .card:nth-child(4) { animation-delay: 0.15s; }
+    .card:nth-child(5) { animation-delay: 0.2s; }
+    .card:nth-child(6) { animation-delay: 0.25s; }
+  </style>
+</head>
+<body>
+
+<div class="bg-deco bg-deco-1"></div>
+<div class="bg-deco bg-deco-2"></div>
+
+<div class="container">
+
+  <!-- HEADER -->
+  <header>
+    <div class="logo-area">
+      <h1>声音 <span>·</span> Voice</h1>
+      <p>Bilingual Text-to-Speech · 双语语音合成</p>
+    </div>
+    <div class="lang-toggle">
+      <button class="lang-btn active" id="btn-en" onclick="setLanguage('en')">English</button>
+      <button class="lang-btn" id="btn-zh" onclick="setLanguage('zh')">中文</button>
+    </div>
+  </header>
+
+  <!-- GRID -->
+  <div class="grid">
+
+    <!-- Text Input -->
+    <div class="card text-card">
+      <div class="card-label" id="lbl-input">Text Input</div>
+
+      <!-- Drop zone / file import bar -->
+      <div id="drop-zone" class="drop-zone" onclick="document.getElementById('file-input').click()" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)">
+        <input type="file" id="file-input" accept=".txt,.md,.csv,.srt,.vtt,.docx,.doc" style="display:none" onchange="onFileSelect(event)">
+        <div class="drop-zone-inner">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" width="22" height="22" style="color:var(--warm);flex-shrink:0"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" x2="12" y1="18" y2="12"/><line x1="9" x2="15" y1="15" y2="15"/></svg>
+          <div>
+            <span id="lbl-drop-main">Click to import file</span>
+            <span id="lbl-drop-sub" style="color:var(--muted);font-size:0.72rem;display:block;margin-top:1px;">.txt · .md · .docx · .csv · .srt · .vtt</span>
+          </div>
+          <span id="drop-file-badge" style="display:none;margin-left:auto;font-size:0.72rem;padding:3px 10px;background:rgba(200,169,110,0.15);border:1px solid rgba(200,169,110,0.35);border-radius:20px;color:var(--warm);white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;"></span>
+        </div>
+        <div id="drop-overlay" style="display:none;position:absolute;inset:0;background:rgba(200,169,110,0.08);border-radius:9px;pointer-events:none;border:2px dashed var(--warm);"></div>
+      </div>
+
+      <textarea id="main-text" placeholder="Type or paste your text here..." rows="7"></textarea>
+      <div class="textarea-footer">
+        <span class="char-count"><span id="char-count">0</span> <span id="lbl-chars">characters</span></span>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button id="btn-clear" onclick="clearText()" style="display:none;font-size:0.72rem;padding:3px 10px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:'DM Sans',sans-serif;transition:all 0.18s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">
+            <span id="lbl-clear">Clear</span>
+          </button>
+          <div class="samples" id="samples-container"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Speech Controls -->
+    <div class="card">
+      <div class="card-label" id="lbl-params">Parameters</div>
+
+      <div class="slider-row">
+        <div class="slider-header">
+          <span class="slider-name" id="lbl-speed">Speed</span>
+          <span class="slider-val" id="val-speed">1.0×</span>
+        </div>
+        <input type="range" id="slider-rate" min="0.5" max="2" step="0.1" value="1"
+               oninput="updateSlider('rate', this.value)">
+        <div class="slider-labels">
+          <span id="lbl-slower">Slower</span><span id="lbl-faster">Faster</span>
+        </div>
+      </div>
+
+      <div class="slider-row">
+        <div class="slider-header">
+          <span class="slider-name" id="lbl-pitch">Pitch</span>
+          <span class="slider-val" id="val-pitch">1.0</span>
+        </div>
+        <input type="range" id="slider-pitch" min="0.5" max="2" step="0.1" value="1"
+               oninput="updateSlider('pitch', this.value)">
+        <div class="slider-labels">
+          <span id="lbl-lower">Lower</span><span id="lbl-higher">Higher</span>
+        </div>
+      </div>
+
+      <div class="slider-row">
+        <div class="slider-header">
+          <span class="slider-name" id="lbl-volume">Volume</span>
+          <span class="slider-val" id="val-volume">100%</span>
+        </div>
+        <input type="range" id="slider-volume" min="0" max="1" step="0.05" value="1"
+               oninput="updateSlider('volume', this.value)">
+        <div class="slider-labels">
+          <span>0%</span><span>100%</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Style -->
+    <div class="card">
+      <div class="card-label" id="lbl-style">Speaking Style</div>
+      <div class="style-select-wrapper">
+        <select id="style-select" onchange="applyStyle(this.value)"></select>
+        <span class="select-arrow">▾</span>
+      </div>
+      <p class="style-desc" id="style-desc"></p>
+    </div>
+
+    <!-- Playback -->
+    <div class="card playback-card">
+      <div class="card-label" id="lbl-playback">Playback</div>
+      <div class="status-bar">
+        <div class="status-dot" id="status-dot"></div>
+        <span class="status-text" id="status-text">Ready</span>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-play" id="btn-play" onclick="handlePlay()">
+          <svg viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21"/></svg>
+          <span id="lbl-play">Play</span>
+        </button>
+        <button class="btn btn-pause" id="btn-pause" onclick="handlePause()" disabled>
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          <span id="lbl-pause">Pause</span>
+        </button>
+        <button class="btn btn-stop" id="btn-stop" onclick="handleStop()" disabled>
+          <svg viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          <span id="lbl-stop">Stop</span>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Voice List -->
+    <div class="card">
+      <div class="card-label">
+        <span id="lbl-voices">Available Voices</span>
+        <span id="voice-count" style="color:var(--warm); font-weight:600; font-size:0.75rem;"></span>
+      </div>
+      <div class="voice-scroll" id="voice-list"></div>
+    </div>
+
+    <!-- Tips -->
+    <div class="card tips-card">
+      <div class="tips-icon">💡</div>
+      <p id="tips-text">For best Chinese results, select a voice marked 中文. English voices work best with English text. You can adjust speed, pitch and volume independently of the style preset.</p>
+    </div>
+
+  </div>
+
+  <footer>
+    <span id="footer-text">Powered by Web Speech API · Chrome, Edge, Safari, Firefox · 浏览器端语音合成</span>
+  </footer>
+
+</div>
+
+<script>
+  // ─── STATE ───
+  let lang = 'en';
+  let voices = [];
+  let selectedVoice = null;
+  let rate = 1, pitch = 1, volume = 1;
+  let speechState = 'idle'; // idle | playing | paused
+  let selectedStyle = 'default';
+
+  // ─── DATA ───
+  const sampleTexts = {
+    en: [
+      { name: 'Welcome', text: 'Hello! Welcome to Voice — a bilingual text-to-speech application. This app supports both English and Chinese, making content accessible to everyone.' },
+      { name: 'Story', text: 'Once upon a time, in a land far away, there lived a brave adventurer. She had climbed mountains, crossed rivers, and — against all odds — discovered the secret of an ancient kingdom. Was she afraid? Not even once.' },
+      { name: 'Tech', text: 'Dr. Smith published her findings in 2024. The new AI system, which processes approximately 1000 requests per second, outperformed all previous models. Is this the future? Many experts believe so.' },
+      { name: 'News', text: 'Breaking news: scientists have discovered a new deep-sea creature — one that glows in the dark! It communicates through rhythmic light pulses, and its discovery has upended everything we knew about ocean biology.' },
+    ],
+    zh: [
+      { name: '欢迎', text: '你好！欢迎使用「声音」——双语语音合成应用。这个应用支持中英文文本转换为自然语音，让内容对每个人都更易获取。' },
+      { name: '故事', text: '从前，有一座深山之中的古庙。庙里住着一位老和尚——他每天讲故事给小和尚听。有一天，小和尚问：「师父，故事里的人，真的存在吗？」老和尚笑而不答。' },
+      { name: '诗词', text: '床前明月光，疑是地上霜。举头望明月，低头思故乡。——李白《静夜思》。每一字，皆是游子心中最深的思念。' },
+      { name: '科技', text: '人工智能技术，正在深刻改变我们的生活方式。从语音合成、图像识别，到自动驾驶——这些以前看似不可能的事，如今已成现实。你准备好了吗？' },
+    ],
+  };
+
+  // Each style defines display names, base params shown in sliders, and a
+  // transform(sentences) function that returns per-chunk { text, r, p, v, pauseAfter }.
+  // Speaking sentences as separate utterances lets us vary rate/pitch/pause per chunk.
+  const styles = {
+    default: {
+      en: ['Default', 'Natural, even-paced speech'],
+      zh: ['默认', '自然平稳的语调'],
+      r: 1.0, p: 1.0, v: 1.0,
+      transform: (sents) => sents.map(s => ({ text: s, r: 1.0, p: 1.0, v: 1.0, pauseAfter: 200 })),
+    },
+    calm: {
+      en: ['Calm', 'Very slow & soft — long pauses, meditative'],
+      zh: ['平静', '极缓柔和，句间长停顿，冥想感'],
+      r: 0.72, p: 0.88, v: 0.88,
+      transform: (sents) => sents.map(s => ({ text: s, r: 0.72, p: 0.88, v: 0.88, pauseAfter: 750 })),
+    },
+    urgent: {
+      en: ['Urgent', 'Fast & high-pitched — clipped like breaking news'],
+      zh: ['紧急', '快速高亢，短促如紧急播报'],
+      r: 1.6, p: 1.4, v: 1.0,
+      transform: (sents) => sents.map(s => ({ text: s, r: 1.6, p: 1.4, v: 1.0, pauseAfter: 50 })),
+    },
+    dramatic: {
+      en: ['Dramatic', 'Builds sentence by sentence — slow opener, fast finish'],
+      zh: ['戏剧', '逐句推进——开头缓慢，结尾加速'],
+      r: 0.8, p: 0.9, v: 1.0,
+      transform: (sents) => sents.map((s, i) => {
+        const t = Math.min(i / Math.max(sents.length - 1, 1), 1);
+        return { text: s, r: 0.75 + t * 0.65, p: 0.85 + t * 0.45, v: 0.82 + t * 0.18, pauseAfter: Math.round(600 - t * 480) };
+      }),
+    },
+    whisper: {
+      en: ['Whisper', 'Very quiet & slow — intimate, secretive'],
+      zh: ['轻声', '极轻极缓，亲密私密'],
+      r: 0.78, p: 0.82, v: 0.45,
+      transform: (sents) => sents.map(s => ({ text: s, r: 0.78, p: 0.82, v: 0.45, pauseAfter: 550 })),
+    },
+    enthusiastic: {
+      en: ['Enthusiastic', 'Fast, high & punchy — alternating rhythm'],
+      zh: ['热情', '快速高亢，交替节奏，充满活力'],
+      r: 1.35, p: 1.28, v: 1.0,
+      transform: (sents) => sents.map((s, i) => ({
+        text: s, r: i % 2 === 0 ? 1.38 : 1.22, p: i % 2 === 0 ? 1.3 : 1.18, v: 1.0, pauseAfter: 90,
+      })),
+    },
+    storyteller: {
+      en: ['Storyteller', 'Alternates slow reflection & fast action sentences'],
+      zh: ['讲故事', '缓慢叙述与快速动作交替'],
+      r: 0.9, p: 1.0, v: 0.95,
+      transform: (sents) => sents.map((s, i) => {
+        const action = i % 2 === 1;
+        return { text: s, r: action ? 1.2 : 0.78, p: action ? 1.15 : 0.9, v: action ? 1.0 : 0.88, pauseAfter: action ? 130 : 600 };
+      }),
+    },
+    robot: {
+      en: ['Robot', 'Flat, fast & mechanical — no pitch variation'],
+      zh: ['机器人', '平稳快速机械，无音调变化'],
+      r: 1.3, p: 0.55, v: 1.0,
+      transform: (sents) => sents.map(s => ({ text: s, r: 1.3, p: 0.55, v: 1.0, pauseAfter: 70 })),
+    },
+  };
+
+  const i18n = {
+    en: {
+      inputLabel: 'Text Input', chars: 'characters', params: 'Parameters',
+      speed: 'Speed', pitch: 'Pitch', volume: 'Volume',
+      slower: 'Slower', faster: 'Faster', lower: 'Lower', higher: 'Higher',
+      styleLabel: 'Speaking Style', playback: 'Playback',
+      play: 'Play', pause: 'Pause', stop: 'Stop', resume: 'Resume',
+      voices: 'Available Voices', placeholder: 'Type or paste your text here...',
+      ready: 'Ready', playing: 'Playing', paused: 'Paused', stopped: 'Stopped',
+      tips: 'The naturalisation engine now shapes speech at 4 levels: abbreviations like Dr. and AI are expanded to full words; commas and dashes create micro-pauses; questions and exclamations shift pitch automatically; and each style modulates the rhythm on top. Try a multi-sentence paragraph with varied punctuation.',
+      dropMain: 'Click to import file', dropSub: '.txt · .md · .docx · .csv · .srt · .vtt',
+      clearBtn: 'Clear',
+      footer: 'Powered by Web Speech API · Chrome, Edge, Safari, Firefox · 浏览器端语音合成',
+    },
+    zh: {
+      inputLabel: '文本输入', chars: '字符', params: '语音参数',
+      speed: '语速', pitch: '音调', volume: '音量',
+      slower: '更慢', faster: '更快', lower: '更低', higher: '更高',
+      styleLabel: '朗读风格', playback: '播放控制',
+      play: '播放', pause: '暂停', stop: '停止', resume: '继续',
+      voices: '可用语音', placeholder: '在此输入或粘贴中文文本...',
+      ready: '就绪', playing: '播放中', paused: '已暂停', stopped: '已停止',
+      tips: '自然化引擎现在从四个层面塑造语音：缩写词展开为完整词；逗号、破折号产生微停顿；问句和感叹句自动调整音调；每种风格在此基础上进一步调节节奏。试试带有丰富标点的多句段落，效果最佳。',
+      dropMain: '点击导入文件', dropSub: '.txt · .md · .docx · .csv · .srt · .vtt',
+      clearBtn: '清除',
+      footer: '基于 Web Speech API · Chrome、Edge、Safari、Firefox · Browser TTS',
+    },
+  };
+
+  // ─── INIT ───
+  window.addEventListener('load', () => {
+    loadVoices();
+    window.speechSynthesis.addEventListener('voiceschanged', loadVoices);
+    setLanguage('en');
+    buildStyleSelect();
+    setupSliderGradients();
+  });
+
+  function loadVoices() {
+    voices = window.speechSynthesis.getVoices();
+    renderVoiceList();
+    if (!selectedVoice && voices.length) {
+      autoSelectVoice();
+    }
+    document.getElementById('voice-count').textContent = voices.length;
+  }
+
+  function setLanguage(l) {
+    lang = l;
+    document.getElementById('btn-en').className = 'lang-btn' + (l === 'en' ? ' active' : '');
+    document.getElementById('btn-zh').className = 'lang-btn' + (l === 'zh' ? ' active' : '');
+    applyI18n();
+    buildSamples();
+    buildStyleSelect();
+    // Set default sample if textarea empty
+    const ta = document.getElementById('main-text');
+    if (!ta.value.trim()) {
+      ta.value = sampleTexts[lang][0].text;
+      updateCharCount();
+    }
+    autoSelectVoice();
+    renderVoiceList();
+  }
+
+  function applyI18n() {
+    const t = i18n[lang];
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    set('lbl-input', t.inputLabel);
+    set('lbl-chars', t.chars);
+    set('lbl-params', t.params);
+    set('lbl-speed', t.speed);
+    set('lbl-slower', t.slower);
+    set('lbl-faster', t.faster);
+    set('lbl-pitch', t.pitch);
+    set('lbl-lower', t.lower);
+    set('lbl-higher', t.higher);
+    set('lbl-volume', t.volume);
+    set('lbl-style', t.styleLabel);
+    set('lbl-playback', t.playback);
+    set('lbl-play', speechState === 'paused' ? t.resume : t.play);
+    set('lbl-pause', t.pause);
+    set('lbl-stop', t.stop);
+    set('lbl-voices', t.voices);
+    set('tips-text', t.tips);
+    set('footer-text', t.footer);
+    document.getElementById('main-text').placeholder = t.placeholder;
+    updateStatus();
+  }
+
+  function buildSamples() {
+    const container = document.getElementById('samples-container');
+    container.innerHTML = '';
+    sampleTexts[lang].forEach(s => {
+      const btn = document.createElement('button');
+      btn.className = 'sample-chip';
+      btn.textContent = s.name;
+      btn.onclick = () => {
+        document.getElementById('main-text').value = s.text;
+        updateCharCount();
+      };
+      container.appendChild(btn);
+    });
+  }
+
+  function buildStyleSelect() {
+    const sel = document.getElementById('style-select');
+    sel.innerHTML = '';
+    Object.entries(styles).forEach(([key, val]) => {
+      const opt = document.createElement('option');
+      opt.value = key;
+      opt.textContent = val[lang][0] + ' — ' + val[lang][1];
+      if (key === selectedStyle) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    updateStyleDesc();
+  }
+
+  function applyStyle(key) {
+    selectedStyle = key;
+    const s = styles[key];
+    rate = s.r; pitch = s.p; volume = s.v;
+    document.getElementById('slider-rate').value = rate;
+    document.getElementById('slider-pitch').value = pitch;
+    document.getElementById('slider-volume').value = volume;
+    updateSliderDisplays();
+    updateStyleDesc();
+    setupSliderGradients();
+  }
+
+  function updateStyleDesc() {
+    const desc = document.getElementById('style-desc');
+    const s = styles[selectedStyle];
+    // Show what makes this style distinctive
+    const notes = [];
+    if (s.r <= 0.8) notes.push(lang === 'en' ? '🐢 Very slow' : '🐢 极慢');
+    else if (s.r >= 1.4) notes.push(lang === 'en' ? '⚡ Very fast' : '⚡ 极快');
+    else if (s.r >= 1.2) notes.push(lang === 'en' ? '↗ Fast' : '↗ 快');
+    else if (s.r <= 0.88) notes.push(lang === 'en' ? '↘ Slow' : '↘ 慢');
+    if (s.p <= 0.65) notes.push(lang === 'en' ? '🤖 Very low pitch' : '🤖 音调极低');
+    else if (s.p >= 1.3) notes.push(lang === 'en' ? '🎵 Very high pitch' : '🎵 音调极高');
+    else if (s.p >= 1.15) notes.push(lang === 'en' ? '↑ High pitch' : '↑ 音调高');
+    else if (s.p <= 0.9) notes.push(lang === 'en' ? '↓ Low pitch' : '↓ 音调低');
+    if (s.v <= 0.5) notes.push(lang === 'en' ? '🤫 Whisper-quiet' : '🤫 低语音量');
+    const hasVariation = !!s.transform.toString().includes('i %');
+    if (hasVariation) notes.push(lang === 'en' ? '〰 Varied rhythm' : '〰 节奏变化');
+    desc.textContent = notes.length ? notes.join(' · ') : (lang === 'en' ? 'Balanced, no strong bias' : '均衡，无明显偏向');
+  }
+
+  function updateSlider(type, val) {
+    val = parseFloat(val);
+    if (type === 'rate') rate = val;
+    if (type === 'pitch') pitch = val;
+    if (type === 'volume') volume = val;
+    updateSliderDisplays();
+    setupSliderGradients();
+  }
+
+  function updateSliderDisplays() {
+    document.getElementById('val-speed').textContent = rate.toFixed(1) + '×';
+    document.getElementById('val-pitch').textContent = pitch.toFixed(1);
+    document.getElementById('val-volume').textContent = Math.round(volume * 100) + '%';
+    document.getElementById('slider-rate').value = rate;
+    document.getElementById('slider-pitch').value = pitch;
+    document.getElementById('slider-volume').value = volume;
+  }
+
+  function setupSliderGradients() {
+    const updateGrad = (id, min, max, val) => {
+      const pct = ((val - min) / (max - min)) * 100;
+      document.getElementById(id).style.setProperty('--pct', pct + '%');
+    };
+    updateGrad('slider-rate', 0.5, 2, rate);
+    updateGrad('slider-pitch', 0.5, 2, pitch);
+    updateGrad('slider-volume', 0, 1, volume);
+  }
+
+  // ─── FILE IMPORT ───
+  function onDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('drop-zone').classList.add('drag-over');
+    document.getElementById('drop-overlay').style.display = 'block';
+  }
+
+  function onDragLeave(e) {
+    e.preventDefault();
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    document.getElementById('drop-overlay').style.display = 'none';
+  }
+
+  function onDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    document.getElementById('drop-zone').classList.remove('drag-over');
+    document.getElementById('drop-overlay').style.display = 'none';
+    const file = e.dataTransfer?.files?.[0];
+    if (file) readFile(file);
+  }
+
+  function onFileSelect(e) {
+    const file = e.target.files?.[0];
+    if (file) readFile(file);
+    // Reset so same file can be re-selected
+    e.target.value = '';
+  }
+
+  function readFile(file) {
+    const ext = file.name.split('.').pop().toLowerCase();
+    const allowedExts = ['txt', 'md', 'csv', 'srt', 'vtt', 'docx', 'doc'];
+
+    if (!allowedExts.includes(ext)) {
+      showFileError(lang === 'en'
+        ? `Unsupported file type ".${ext}". Use .txt, .md, .docx, .csv, .srt or .vtt`
+        : `不支持的文件类型".${ext}"，请使用 .txt、.md、.docx、.csv、.srt 或 .vtt`);
+      return;
+    }
+
+    // .doc (old binary format) — no pure-JS parser; ask user to re-save as .docx
+    if (ext === 'doc') {
+      showFileError(lang === 'en'
+        ? 'Old .doc format is not supported. Please open in Word and save as .docx, then import again.'
+        : '不支持旧版 .doc 格式。请在 Word 中打开并另存为 .docx，再重新导入。');
+      return;
+    }
+
+    // .docx — parse with Mammoth.js
+    if (ext === 'docx') {
+      if (typeof mammoth === 'undefined') {
+        showFileError(lang === 'en'
+          ? 'Mammoth.js library not loaded. Please check your internet connection.'
+          : 'Mammoth.js 库未加载，请检查网络连接。');
+        return;
+      }
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        mammoth.extractRawText({ arrayBuffer: e.target.result })
+          .then((result) => {
+            let text = (result.value || '').replace(/\n{3,}/g, '\n\n').trim();
+            if (!text) {
+              showFileError(lang === 'en' ? 'Document appears to be empty.' : '文档内容为空。');
+              return;
+            }
+            document.getElementById('main-text').value = text;
+            updateCharCount();
+            setFileBadge(file.name);
+            document.getElementById('btn-clear').style.display = 'inline-flex';
+          })
+          .catch((err) => {
+            showFileError(lang === 'en'
+              ? 'Could not read .docx file: ' + (err.message || err)
+              : '无法读取 .docx 文件：' + (err.message || err));
+          });
+      };
+      reader.onerror = () => showFileError(lang === 'en' ? 'Could not read file.' : '无法读取文件。');
+      reader.readAsArrayBuffer(file);
+      return;
+    }
+
+    // Plain text formats: txt, md, csv, srt, vtt
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      let text = e.target.result || '';
+
+      if (ext === 'srt') {
+        text = text
+          .replace(/^\d+\s*$/gm, '')
+          .replace(/\d{2}:\d{2}:\d{2}[,\.]\d{3}\s*-->\s*.+/g, '')
+          .replace(/<[^>]+>/g, '')
+          .replace(/\{[^}]+\}/g, '')
+          .trim();
+      } else if (ext === 'vtt') {
+        text = text
+          .replace(/^WEBVTT.*$/m, '')
+          .replace(/^\d{2}:\d{2}[:.]\d{3}\s*-->\s*.+/gm, '')
+          .replace(/<[^>]+>/g, '')
+          .replace(/^NOTE\s.*$/gm, '')
+          .trim();
+      } else if (ext === 'csv') {
+        const cells = [];
+        const matches = text.matchAll(/"([^"]*?)"|([^,\n]+)/g);
+        for (const m of matches) cells.push((m[1] || m[2] || '').trim());
+        text = cells.filter(Boolean).join(' ');
+      }
+
+      text = text.replace(/\n{3,}/g, '\n\n').trim();
+
+      if (!text) {
+        showFileError(lang === 'en' ? 'File appears to be empty.' : '文件内容为空。');
+        return;
+      }
+
+      document.getElementById('main-text').value = text;
+      updateCharCount();
+      setFileBadge(file.name);
+      document.getElementById('btn-clear').style.display = 'inline-flex';
+    };
+    reader.onerror = () => showFileError(lang === 'en' ? 'Could not read file.' : '无法读取文件。');
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  function setFileBadge(name) {
+    const badge = document.getElementById('drop-file-badge');
+    badge.textContent = '📄 ' + name;
+    badge.style.display = 'inline-block';
+    document.getElementById('lbl-drop-main').textContent =
+      lang === 'en' ? 'Import different file' : '导入其他文件';
+  }
+
+  function showFileError(msg) {
+    const ta = document.getElementById('main-text');
+    ta.value = '';
+    ta.placeholder = '⚠ ' + msg;
+    setTimeout(() => {
+      ta.placeholder = lang === 'en'
+        ? 'Type or paste your text here...'
+        : '在此输入或粘贴中文文本...';
+    }, 3500);
+  }
+
+  function clearText() {
+    document.getElementById('main-text').value = '';
+    updateCharCount();
+    document.getElementById('drop-file-badge').style.display = 'none';
+    document.getElementById('lbl-drop-main').textContent =
+      lang === 'en' ? 'Click to import file' : '点击导入文件';
+    document.getElementById('btn-clear').style.display = 'none';
+  }
+
+
+  function updateCharCount() {
+    const val = document.getElementById('main-text').value;
+    document.getElementById('char-count').textContent = val.length;
+  }
+  document.getElementById('main-text').addEventListener('input', updateCharCount);
+
+  // ─── VOICE HELPERS ───
+  function isChineseVoice(v) {
+    const l = v.lang.toLowerCase(), n = v.name.toLowerCase();
+    return l.startsWith('zh') || l.startsWith('cmn') || l.includes('chinese') ||
+           n.includes('chinese') || n.includes('普通话') || n.includes('中文') ||
+           n.includes('huihui') || n.includes('kangkang') || n.includes('yaoyao');
+  }
+  function isEnglishVoice(v) {
+    return v.lang.toLowerCase().startsWith('en');
+  }
+  function getLangTag(v) {
+    if (isChineseVoice(v)) return { label: '中文', cls: 'tag-zh' };
+    if (isEnglishVoice(v)) return { label: 'EN', cls: 'tag-en' };
+    return { label: v.lang.substring(0,5), cls: 'tag-other' };
+  }
+
+  function autoSelectVoice() {
+    if (!voices.length) return;
+    const preferred = voices.find(v => lang === 'zh' ? isChineseVoice(v) : isEnglishVoice(v));
+    selectedVoice = preferred ? preferred.name : voices[0].name;
+    renderVoiceList();
+  }
+
+  function renderVoiceList() {
+    const container = document.getElementById('voice-list');
+    container.innerHTML = '';
+
+    // Group voices
+    const groups = {};
+    voices.forEach(v => {
+      const code = v.lang.split('-')[0].toLowerCase();
+      if (!groups[code]) groups[code] = { label: '', voices: [] };
+      groups[code].voices.push(v);
+    });
+
+    // Label groups
+    const labelMap = { zh: '中文 / Chinese', cmn: '中文 / Chinese', en: 'English', ja: '日本語', ko: '한국어', es: 'Español', fr: 'Français', de: 'Deutsch' };
+    Object.keys(groups).forEach(k => {
+      groups[k].label = labelMap[k] || k.toUpperCase();
+    });
+
+    // Sort: zh, en first
+    const sorted = Object.entries(groups).sort(([a], [b]) => {
+      if (a === 'zh' || a === 'cmn') return -1;
+      if (b === 'zh' || b === 'cmn') return 1;
+      if (a === 'en') return -1;
+      if (b === 'en') return 1;
+      return 0;
+    });
+
+    sorted.forEach(([code, group]) => {
+      if (!group.voices.length) return;
+      const gl = document.createElement('div');
+      gl.className = 'voice-group-label';
+      gl.textContent = group.label;
+      container.appendChild(gl);
+
+      group.voices.slice(0, 6).forEach(v => {
+        const btn = document.createElement('button');
+        btn.className = 'voice-btn' + (v.name === selectedVoice ? ' selected' : '');
+        const tag = getLangTag(v);
+        btn.innerHTML = `
+          <span class="voice-name">${v.name}</span>
+          <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
+            <span class="voice-lang-tag ${tag.cls}">${tag.label}</span>
+            ${v.name === selectedVoice ? '<div class="active-dot"></div>' : ''}
+          </div>`;
+        btn.onclick = () => {
+          selectedVoice = v.name;
+          renderVoiceList();
+        };
+        container.appendChild(btn);
+      });
+
+      if (group.voices.length > 6) {
+        const more = document.createElement('div');
+        more.style.cssText = 'font-size:0.72rem;color:var(--muted);padding:4px 2px;';
+        more.textContent = '+' + (group.voices.length - 6) + (lang === 'zh' ? ' 个更多' : ' more');
+        container.appendChild(more);
+      }
+    });
+
+    document.getElementById('voice-count').textContent = voices.length;
+  }
+
+  // ══════════════════════════════════════════════════════
+  //  NATURALISATION ENGINE
+  //  Applies multiple passes to make speech sound human:
+  //  1. Phonetic expansion  — abbreviations, numbers, symbols → words
+  //  2. Clause splitting    — break at commas/dashes for micro-pauses
+  //  3. Punctuation pacing  — pause duration from punctuation type
+  //  4. Sentence-type pitch — questions rise, exclamations jump, statements fall
+  //  5. Breath gaps         — silent spacer utterances between clauses
+  //  6. Style transform     — each style shapes the final chunk list
+  // ══════════════════════════════════════════════════════
+
+  // ── 1. Phonetic expansion ──
+  const phoneticMap = {
+    // Titles & honorifics
+    'Dr\\.': 'Doctor', 'Mr\\.': 'Mister', 'Mrs\\.': 'Missus', 'Ms\\.': 'Miss',
+    'Prof\\.': 'Professor', 'St\\.': 'Saint', 'Ave\\.': 'Avenue', 'Blvd\\.': 'Boulevard',
+    // Common abbreviations
+    'e\\.g\\.': 'for example', 'i\\.e\\.': 'that is', 'etc\\.': 'and so on',
+    'vs\\.': 'versus', 'approx\\.': 'approximately', 'dept\\.': 'department',
+    // Tech & units
+    'AI': 'A I', 'API': 'A P I', 'URL': 'U R L', 'UI': 'U I', 'TTS': 'T T S',
+    'km': 'kilometres', 'kg': 'kilograms', 'mph': 'miles per hour',
+    // Symbols
+    '&': 'and', '%': 'percent', '@': 'at', '#': 'number', '\\.{3}': '. . .',
+  };
+
+  const zhPhoneticMap = {
+    'AI': '人工智能', 'API': '接口', 'TTS': '语音合成',
+    '&': '和', '%': '百分之', '@': '在',
+  };
+
+  function expandPhonetics(text) {
+    const map = lang === 'zh' ? zhPhoneticMap : phoneticMap;
+    let out = text;
+    for (const [pat, rep] of Object.entries(map)) {
+      out = out.replace(new RegExp(pat, 'g'), rep);
+    }
+    // Expand cardinal numbers to words (English only, up to 9999)
+    if (lang === 'en') {
+      out = out.replace(/\b(\d{1,4})\b/g, (_, n) => numberToWords(parseInt(n)));
+    }
+    return out;
+  }
+
+  function numberToWords(n) {
+    if (n === 0) return 'zero';
+    const ones = ['','one','two','three','four','five','six','seven','eight','nine',
+                  'ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen',
+                  'seventeen','eighteen','nineteen'];
+    const tens = ['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+    if (n < 20) return ones[n];
+    if (n < 100) return tens[Math.floor(n/10)] + (n%10 ? '-' + ones[n%10] : '');
+    if (n < 1000) return ones[Math.floor(n/100)] + ' hundred' + (n%100 ? ' ' + numberToWords(n%100) : '');
+    return ones[Math.floor(n/1000)] + ' thousand' + (n%1000 ? ' ' + numberToWords(n%1000) : '');
+  }
+
+  // ── 2 & 3. Split into clauses with pause metadata ──
+  function splitIntoClauses(text) {
+    // For Chinese: split on Chinese punctuation
+    if (lang === 'zh') {
+      const parts = text.split(/(，|。|！|？|；|……|——|、)/);
+      const clauses = [];
+      for (let i = 0; i < parts.length; i += 2) {
+        const txt = (parts[i] || '').trim();
+        const punct = parts[i + 1] || '';
+        if (!txt && !punct) continue;
+        let pause = 120, pitchHint = 'neutral';
+        if (punct === '。') { pause = 480; pitchHint = 'fall'; }
+        else if (punct === '！') { pause = 400; pitchHint = 'exclaim'; }
+        else if (punct === '？') { pause = 420; pitchHint = 'question'; }
+        else if (punct === '，' || punct === '、') { pause = 160; pitchHint = 'neutral'; }
+        else if (punct === '；') { pause = 260; pitchHint = 'neutral'; }
+        else if (punct === '……') { pause = 600; pitchHint = 'trail'; }
+        else if (punct === '——') { pause = 220; pitchHint = 'aside'; }
+        if (txt) clauses.push({ text: txt + punct, pause, pitchHint });
+      }
+      return clauses.length ? clauses : [{ text, pause: 300, pitchHint: 'neutral' }];
+    }
+
+    // English: split on sentence-ending + internal clause markers
+    const segments = [];
+    // First split on sentence boundaries
+    const sentences = text.match(/[^.!?…]+[.!?…]+\s*|[^.!?…]+$/g) || [text];
+    for (const sent of sentences) {
+      const trimmed = sent.trim();
+      if (!trimmed) continue;
+      // Detect sentence type for pitch shaping
+      const endsQ = /\?$/.test(trimmed);
+      const endsEx = /!$/.test(trimmed);
+      const endsEllipsis = /\.{3}|…/.test(trimmed);
+      const sentPause = endsQ ? 420 : endsEx ? 380 : endsEllipsis ? 550 : 460;
+      const sentPitch = endsQ ? 'question' : endsEx ? 'exclaim' : endsEllipsis ? 'trail' : 'fall';
+
+      // Sub-split on internal clause markers: commas, semicolons, dashes, parentheses
+      const subParts = trimmed.split(/(,\s*|;\s*|—|–|\s+-\s+)/);
+      const clauseTexts = [];
+      let buf = '';
+      for (const part of subParts) {
+        if (/^[,;—–-]/.test(part) || /,\s*$/.test(part)) {
+          if (buf.trim()) clauseTexts.push({ text: buf.trim(), pause: /;/.test(part) ? 240 : 140, pitchHint: 'neutral' });
+          buf = '';
+        } else {
+          buf += part;
+        }
+      }
+      if (buf.trim()) clauseTexts.push({ text: buf.trim(), pause: sentPause, pitchHint: sentPitch });
+
+      segments.push(...clauseTexts);
+    }
+    return segments.length ? segments : [{ text, pause: 350, pitchHint: 'neutral' }];
+  }
+
+  // ── 4. Pitch shaping by sentence type ──
+  // Returns { pitchStart, pitchEnd } that we interpolate across chunk words
+  function pitchForHint(hint, baseRate, basePitch) {
+    // These are slight nudges — the browser clamps pitch to [0,2]
+    switch (hint) {
+      case 'question': return { r: baseRate * 0.96, p: Math.min(basePitch * 1.18, 2) };   // rise at end → simulate by slightly higher pitch whole clause
+      case 'exclaim':  return { r: baseRate * 1.10, p: Math.min(basePitch * 1.22, 2) };   // higher + faster
+      case 'fall':     return { r: baseRate * 0.98, p: Math.max(basePitch * 0.95, 0.1) }; // slight fall
+      case 'trail':    return { r: baseRate * 0.82, p: Math.max(basePitch * 0.88, 0.1) }; // slow + low = trailing off
+      case 'aside':    return { r: baseRate * 1.05, p: Math.max(basePitch * 0.92, 0.1) }; // parenthetical: slightly faster, lower
+      default:         return { r: baseRate, p: basePitch };
+    }
+  }
+
+  // ── 5. Build final utterance queue from clauses ──
+  function buildQueue(rawText, styleKey) {
+    const style = styles[styleKey];
+    const baseR = rate, baseP = pitch, baseV = volume;
+
+    // Pass 1: phonetic expansion
+    const expanded = expandPhonetics(rawText);
+
+    // Pass 2: clause splitting with pause/pitch metadata
+    const clauses = splitIntoClauses(expanded);
+
+    // Pass 3: apply style transform to sentences (group clauses by sentence)
+    // For style variation, we treat each clause as a "sentence" for the transform
+    const styledChunks = style.transform(clauses.map(c => c.text));
+
+    // Pass 4: merge style params with naturalisation pitch hints
+    const queue = clauses.map((clause, i) => {
+      const sc = styledChunks[i] || styledChunks[styledChunks.length - 1];
+      const shaped = pitchForHint(clause.pitchHint, sc.r, sc.p);
+      return {
+        text: clause.text,
+        r: shaped.r,
+        p: shaped.p,
+        v: sc.v,
+        pauseAfter: Math.round((clause.pause || 200) * (2 - sc.r + 0.5)), // longer pauses at slower speeds
+      };
+    });
+
+    return queue;
+  }
+
+  // ─── PLAYBACK ───
+  let utteranceQueue = [];
+  let queueIndex = 0;
+
+  function handlePlay() {
+    const text = document.getElementById('main-text').value.trim();
+    if (!text) return;
+
+    if (speechState === 'paused') {
+      window.speechSynthesis.resume();
+      setState('playing');
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    utteranceQueue = buildQueue(text, selectedStyle);
+    queueIndex = 0;
+    setState('playing');
+    playNextChunk();
+  }
+
+  function playNextChunk() {
+    if (queueIndex >= utteranceQueue.length) {
+      setState('idle');
+      queueIndex = 0;
+      return;
+    }
+    if (speechState === 'idle') { queueIndex = 0; return; }
+
+    const chunk = utteranceQueue[queueIndex];
+    const voice = voices.find(v => v.name === selectedVoice);
+
+    const utt = new SpeechSynthesisUtterance(chunk.text);
+    if (voice) utt.voice = voice;
+    utt.lang = lang === 'zh' ? 'zh-CN' : 'en-US';
+    utt.rate   = Math.min(Math.max(chunk.r, 0.1), 10);
+    utt.pitch  = Math.min(Math.max(chunk.p, 0),   2);
+    utt.volume = Math.min(Math.max(chunk.v, 0),   1);
+
+    utt.onend = () => {
+      if (speechState === 'idle') return;
+      queueIndex++;
+      const pause = chunk.pauseAfter || 0;
+      setTimeout(playNextChunk, pause);
+    };
+    utt.onerror = (e) => {
+      if (e.error !== 'interrupted') { queueIndex++; setTimeout(playNextChunk, 80); }
+    };
+
+    window.speechSynthesis.speak(utt);
+  }
+
+  function handlePause() {
+    if (speechState !== 'playing') return;
+    window.speechSynthesis.pause();
+    setState('paused');
+  }
+
+  function handleStop() {
+    window.speechSynthesis.cancel();
+    utteranceQueue = [];
+    queueIndex = 0;
+    setState('idle');
+  }
+
+  function setState(s) {
+    speechState = s;
+    updateStatus();
+    updateButtons();
+  }
+
+  function updateStatus() {
+    const t = i18n[lang];
+    const dot = document.getElementById('status-dot');
+    const txt = document.getElementById('status-text');
+    dot.className = 'status-dot' + (speechState === 'playing' ? ' playing' : speechState === 'paused' ? ' paused' : '');
+    txt.textContent = { idle: t.ready, playing: t.playing, paused: t.paused }[speechState] || t.ready;
+    document.getElementById('lbl-play').textContent = speechState === 'paused' ? t.resume : t.play;
+  }
+
+  function updateButtons() {
+    document.getElementById('btn-play').disabled = speechState === 'playing';
+    document.getElementById('btn-pause').disabled = speechState !== 'playing';
+    document.getElementById('btn-stop').disabled = speechState === 'idle';
+  }
+
+  function detectSandbox() {}
+
+  const _origApplyI18n = applyI18n;
+  applyI18n = function () {
+    _origApplyI18n();
+    const t = i18n[lang];
+    const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    const badge = document.getElementById('drop-file-badge');
+    const hasFile = badge && badge.style.display !== 'none';
+    if (!hasFile) set('lbl-drop-main', t.dropMain);
+    set('lbl-drop-sub', t.dropSub);
+    set('lbl-clear', t.clearBtn);
+  };
+
+  // init
+  updateSliderDisplays();
+  updateButtons();
+</script>
+</body>
+</html>
